@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+MODEL_ID=${model_id}
+APP_BUCKET=${app_bucket}
+APP_OBJECT=${app_object}
+REQUIREMENTS_PATH=${requirements_path}
+LOG_FILE=/var/log/vllm-instance.log
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+apt-get update
+apt-get install -y python3 python3-venv python3-pip build-essential google-cloud-cli
+
+# Install GPU drivers per official docs (update as needed for your GPU).
+if ! command -v nvidia-smi; then
+  curl -sS https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb
+  dpkg -i /tmp/cuda-keyring.deb
+  apt-get update
+  apt-get install -y cuda-drivers
+fi
+
+mkdir -p /opt/app
+cd /opt/app
+
+gsutil cp gs://${APP_BUCKET}/${APP_OBJECT} /opt/app/app.tar.gz
+mkdir -p /opt/app/src
+cd /opt/app/src
+tar -xzf /opt/app/app.tar.gz
+
+python3 -m venv /opt/app/venv
+source /opt/app/venv/bin/activate
+pip install --upgrade pip
+pip install -r ${REQUIREMENTS_PATH}
+
+nohup python server.py --model "${MODEL_ID}" --host 0.0.0.0 --port 8000 &

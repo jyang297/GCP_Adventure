@@ -1,0 +1,1 @@
+Summarize why VPC Service Controls help protect data exfiltration paths in GCP.
